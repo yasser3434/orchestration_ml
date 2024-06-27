@@ -1,44 +1,36 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import pandas as pd
+import numpy as np
 import joblib
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-import json
-import redis
-from io import StringIO
-
 
 app = FastAPI()
 
-class InputData(BaseModel):
+# Define a Pydantic model for the features
+class PredictionRequest(BaseModel):
     ProductionVolume: int
     DefectRate: float
     QualityScore: float
     MaintenanceHours: int
     StockoutRate: float
 
-def load_model(file_path):
-    return joblib.load(file_path)
+# Load the trained model
+model = joblib.load('model.pkl')
 
-
-@app.get("/predict/")
-async def predict(data: InputData):
-    input_dict = {
-        "Production Volume": data.ProductionVolume,
-        "Defect Rate": data.DefectRate,
-        "Quality Score": data.QualityScore,
-        "Maintenance Hours": data.MaintenanceHours,
-        "Stockout Rate": data.StockoutRate
-    }
-
-
-    input_df = pd.DataFrame([input_dict])
-    model = load_model('model.pkl')
-    prediction = model.predict(input_df)
-    prediction = {"prediction": prediction[0][0]}
-    return prediction
+@app.post("/predict/")
+async def predict(request: PredictionRequest):
+    try:
+        features = np.array([[
+            request.ProductionVolume,
+            request.DefectRate,
+            request.QualityScore,
+            request.MaintenanceHours,
+            request.StockoutRate
+        ]])
+        
+        prediction = model.predict(features)
+        
+        predicted_class = int(prediction[0] > 0.5) 
+        
+        return {"prediction": predicted_class}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
