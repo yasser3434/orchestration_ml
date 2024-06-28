@@ -8,10 +8,10 @@ services:
     depends_on:
       - redis
     environment:
-      - REDIS_HOST=redis
-      - AWS_ACCESS_KEY_ID=AKIAR35MHWDOQQISLJ7U
-      - AWS_SECRET_ACCESS_KEY=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
-      - AWS_DEFAULT_REGION=eu-west-3
+      - REDIS_HOST=${REDIS_HOST}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
 
   streamlit:
     build:
