@@ -13,7 +13,7 @@ from io import BytesIO
 app = FastAPI()
 
 # Initialize Redis client
-redis = aioredis.from_url("redis://localhost")
+redis = aioredis.from_url("redis://redis")
 
 # S3 Configuration
 S3_BUCKET_NAME = "airflow-ml-models"
@@ -53,20 +53,24 @@ async def shutdown_event():
 
 # Define the request model
 class PredictionRequest(BaseModel):
-    features: List[float]
+    ProductionVolume: int
+    DefectRate: float
+    QualityScore: float
+    MaintenanceHours: int
+    StockoutRate: float
 
 # Define the response model
 class PredictionResponse(BaseModel):
     prediction: int
 
 # Utility function to generate a Redis key
-def generate_cache_key(features: List[float]) -> str:
-    return "prediction:" + ":".join(map(str, features))
+def generate_cache_key(data: dict) -> str:
+    return "prediction:" + ":".join(f"{key}={value}" for key, value in data.items())
 
-@app.get("/predict", response_model=PredictionResponse)
+@app.post("/predict", response_model=PredictionResponse)
 async def predict(request: PredictionRequest):
-    features = request.features
-    cache_key = generate_cache_key(features)
+    data = request.dict()
+    cache_key = generate_cache_key(data)
 
     # Check the cache
     cached_prediction = await redis.get(cache_key)
@@ -74,7 +78,7 @@ async def predict(request: PredictionRequest):
         prediction = int(cached_prediction)
     else:
         # If not cached, perform the prediction
-        df = pd.DataFrame([features])
+        df = pd.DataFrame([data])
         prediction = model.predict(df)[0]
 
         # Cache the prediction

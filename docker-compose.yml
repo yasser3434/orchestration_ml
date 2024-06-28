@@ -1,5 +1,31 @@
 version: '3'
 services:
+  fastapi:
+    build:
+      context: ./api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - AWS_ACCESS_KEY_ID=AKIAR35MHWDOQQISLJ7U
+      - AWS_SECRET_ACCESS_KEY=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
+      - AWS_DEFAULT_REGION=eu-west-3
+
+  streamlit:
+    build:
+      context: ./api
+    command: ["streamlit", "run", "streamlit_app.py"]
+    ports:
+      - "8501:8501"
+    depends_on:
+      - fastapi
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
   postgres:
     image: postgres:13
     environment:
@@ -48,6 +74,7 @@ services:
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
     command: scheduler
+
 
 volumes:
   postgres_data:
