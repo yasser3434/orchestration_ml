@@ -44,3 +44,4 @@ def train_and_evaluate(df_json):
 
     # Return the base64 encoded model
     return model_base64
+    # return {"model_base64": model_base64, "accuracy": accuracy}

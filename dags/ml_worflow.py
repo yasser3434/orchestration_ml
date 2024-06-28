@@ -6,7 +6,10 @@ from tasks.read_csv_from_s3 import read_csv_from_s3
 from tasks.train_and_evaluate import train_and_evaluate
 from tasks.save_model import save_model_to_s3
 
-with DAG('ml_workflow', start_date=datetime(2023, 1, 1), schedule_interval='@daily', catchup=False) as dag:
+with DAG('ml_workflow',
+        start_date=datetime(2023, 1, 1), 
+        schedule_interval='@daily', 
+        catchup=False) as dag:
 
     read_csv_task = PythonOperator(
         task_id='read_csv_from_s3',

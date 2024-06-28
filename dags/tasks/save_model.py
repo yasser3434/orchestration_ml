@@ -5,6 +5,7 @@ from datetime import datetime
 import base64
 
 def save_model_to_s3(model_base64, base_filename, bucket_name):
+    
     # Decode the base64 encoded model
     model_data = base64.b64decode(model_base64)
     model_buffer = BytesIO(model_data)
@@ -12,7 +13,8 @@ def save_model_to_s3(model_base64, base_filename, bucket_name):
     
     # Current timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    filename = f"{base_filename}-{timestamp}.pkl"
+    model_filename = f"{base_filename}-{timestamp}.pkl"
+    accuracy_filename = f"accuracy-{timestamp}.json"
 
     # Serialize model into a bytes buffer
     buffer = BytesIO()
@@ -26,7 +28,7 @@ def save_model_to_s3(model_base64, base_filename, bucket_name):
     s3_hook.load_bytes(
         buffer.getvalue(),
         bucket_name=bucket_name,
-        key=filename,
+        key=model_filename,
         replace=True  # Overwrite if the file already exists
     )
-    print(f"Model saved to S3 bucket {bucket_name} with filename {filename}")
+    print(f"Model saved to S3 bucket {bucket_name} with filename {model_filename}")
