@@ -1,88 +1,32 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import joblib
-import pandas as pd
-import aioredis
-from typing import List
-import json
-import boto3
+from airflow import DAG
+from airflow.operators.python import PythonOperator
 from datetime import datetime
-from io import BytesIO
 
-# Initialize FastAPI app
-app = FastAPI()
+from tasks.read_csv_from_s3 import read_csv_from_s3
+from tasks.train_and_evaluate import train_and_evaluate
+from tasks.save_model import save_model_to_s3
 
-# Initialize Redis client
-redis = aioredis.from_url("redis://localhost")
+with DAG('ml_workflow', start_date=datetime(2023, 1, 1), schedule_interval='@daily', catchup=False) as dag:
 
-# S3 Configuration
-S3_BUCKET_NAME = "airflow-ml-models"
-S3_MODEL_PREFIX = "model"
+    read_csv_task = PythonOperator(
+        task_id='read_csv_from_s3',
+        python_callable=read_csv_from_s3
+    )
 
-s3_client = boto3.client('s3')
+    train_evaluate_task = PythonOperator(
+        task_id='train_and_evaluate',
+        python_callable=train_and_evaluate,
+        op_args=[read_csv_task.output]
+    )
 
-# Function to fetch the latest model from S3
-def fetch_latest_model_from_s3():
-    response = s3_client.list_objects_v2(Bucket=S3_BUCKET_NAME, Prefix=S3_MODEL_PREFIX)
-    
-    if 'Contents' not in response:
-        raise Exception("No models found in S3 bucket.")
-    
-    # Find the latest model based on the timestamp in the filename
-    latest_model = max(response['Contents'], key=lambda x: x['LastModified'])
-    model_key = latest_model['Key']
+    save_model_task = PythonOperator(
+        task_id='save_model_to_s3',
+        python_callable=save_model_to_s3,
+        op_args=[
+            train_evaluate_task.output,
+            'model',  # name for the model file
+            'airflow-ml-models'  # S3 bucket name
+        ]
+    )
 
-    # Download the latest model
-    model_obj = s3_client.get_object(Bucket=S3_BUCKET_NAME, Key=model_key)
-    model_data = model_obj['Body'].read()
-    
-    # Deserialize the model
-    model = joblib.load(BytesIO(model_data))
-    return model
-
-# Load the model during startup
-@app.on_event("startup")
-async def startup_event():
-    global model
-    model = fetch_latest_model_from_s3()
-    await redis.initialize()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    await redis.close()
-
-# Define the request model
-class PredictionRequest(BaseModel):
-    features: List[float]
-
-# Define the response model
-class PredictionResponse(BaseModel):
-    prediction: int
-
-# Utility function to generate a Redis key
-def generate_cache_key(features: List[float]) -> str:
-    return "prediction:" + ":".join(map(str, features))
-
-@app.get("/predict", response_model=PredictionResponse)
-async def predict(request: PredictionRequest):
-    features = request.features
-    cache_key = generate_cache_key(features)
-
-    # Check the cache
-    cached_prediction = await redis.get(cache_key)
-    if cached_prediction:
-        prediction = int(cached_prediction)
-    else:
-        # If not cached, perform the prediction
-        df = pd.DataFrame([features])
-        prediction = model.predict(df)[0]
-
-        # Cache the prediction
-        await redis.set(cache_key, str(prediction))
-
-    return PredictionResponse(prediction=prediction)
-
-# Run the FastAPI app
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    read_csv_task >> train_evaluate_task >> save_model_task
